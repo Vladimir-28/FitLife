@@ -8,6 +8,7 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 
 import mx.edu.utez.fitlife.ui.components.*
+import mx.edu.utez.fitlife.ui.components.cards.DailyGoal
 import mx.edu.utez.fitlife.ui.theme.*
 
 @Composable

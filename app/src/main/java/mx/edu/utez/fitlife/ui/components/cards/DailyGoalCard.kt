@@ -1,4 +1,4 @@
-package mx.edu.utez.fitlife.ui.components
+package mx.edu.utez.fitlife.ui.components.cards
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -6,7 +6,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
 import androidx.compose.ui.unit.*
-import androidx.compose.ui.graphics.Shape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.Color
 import mx.edu.utez.fitlife.ui.theme.LightBlue
