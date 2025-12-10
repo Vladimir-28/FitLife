@@ -25,8 +25,7 @@ interface ApiService {
 }
 
 object ApiClient {
-    // 10.0.2.2 permite acceder al host desde el emulador Android.
-    // Cambia esta URL si pruebas en dispositivo físico (usa tu IP local).
+
     private const val BASE_URL = "http://192.168.0.22:5000/"
 
     val instance: ApiService by lazy {

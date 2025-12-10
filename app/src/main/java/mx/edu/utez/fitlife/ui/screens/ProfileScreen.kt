@@ -14,6 +14,8 @@ import androidx.compose.foundation.background
 import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 
 import mx.edu.utez.fitlife.ui.components.*
 import mx.edu.utez.fitlife.ui.theme.*
@@ -52,12 +54,17 @@ fun ProfileScreen(navController: NavController) {
     // Formatear tiempo total
     val totalTimeFormatted = formatMinutesToTime(totalTimeMinutes)
 
-    Column {
+    Column(
+        modifier = Modifier.fillMaxSize()
+    ) {
 
         Header("Mi Perfil")
 
         Column(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier
+                .weight(1f, fill = true)
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
 
@@ -182,7 +189,7 @@ fun ProfileScreen(navController: NavController) {
             }
         }
 
-        Spacer(Modifier.weight(1f))
+        Spacer(modifier = Modifier.height(8.dp))
         BottomPillBar(navController, "profile")
     }
 }

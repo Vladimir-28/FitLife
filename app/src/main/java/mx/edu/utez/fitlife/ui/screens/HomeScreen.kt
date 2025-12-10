@@ -20,6 +20,9 @@ import mx.edu.utez.fitlife.ui.components.cards.DEFAULT_DAILY_GOAL
 import mx.edu.utez.fitlife.ui.theme.*
 import mx.edu.utez.fitlife.viewmodel.ActivityViewModel
 import androidx.activity.ComponentActivity
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun HomeScreen(navController: NavController) {
@@ -79,12 +82,11 @@ fun HomeScreen(navController: NavController) {
             }
 
     val goalSteps = DEFAULT_DAILY_GOAL
-    // Calcular progreso diario (basado en meta configurable)
-            val todaySteps = if (activities.isNotEmpty()) {
-                activities.lastOrNull()?.steps ?: 0
-            } else {
-                0
-            }
+    // Calcular pasos del día actual sumando todas las entradas del mismo día
+    val todayKey = SimpleDateFormat("EEE", Locale.getDefault()).format(Date()).take(3).lowercase()
+    val todaySteps = activities
+        .filter { it.day.take(3).lowercase() == todayKey }
+        .sumOf { it.steps }
     DailyGoal(currentSteps = todaySteps, goalSteps = goalSteps)
 
             // Tarjeta del sensor de pasos
