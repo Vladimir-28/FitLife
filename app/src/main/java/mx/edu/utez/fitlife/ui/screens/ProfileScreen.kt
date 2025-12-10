@@ -18,6 +18,7 @@ import androidx.navigation.NavController
 import mx.edu.utez.fitlife.ui.components.*
 import mx.edu.utez.fitlife.ui.theme.*
 import mx.edu.utez.fitlife.viewmodel.AuthViewModel
+import mx.edu.utez.fitlife.viewmodel.ActivityViewModel
 
 @Composable
 fun ProfileScreen(navController: NavController) {
@@ -31,12 +32,24 @@ fun ProfileScreen(navController: NavController) {
         }
     )
     
+    val activityViewModel: ActivityViewModel = viewModel()
+    val activities by activityViewModel.activities.collectAsState()
     val currentUser by authViewModel.currentUser.collectAsState()
     
     // Verificar sesión al cargar
     LaunchedEffect(Unit) {
         authViewModel.checkSession()
     }
+    
+    // Calcular estadísticas reales desde las actividades
+    val totalSteps = activities.sumOf { it.steps }
+    val totalDistance = activities.sumOf { it.distanceKm.toDouble() }.toFloat()
+    val totalTimeMinutes = activities.sumOf { 
+        parseTimeToMinutes(it.activeTime) 
+    }
+    
+    // Formatear tiempo total
+    val totalTimeFormatted = formatMinutesToTime(totalTimeMinutes)
 
     Column {
 
@@ -68,30 +81,80 @@ fun ProfileScreen(navController: NavController) {
 
             Divider()
 
-            Text("Información personal")
+            Text(
+                "Información personal",
+                style = MaterialTheme.typography.titleMedium
+            )
 
-            Card {
+            Card(
+                modifier = Modifier.fillMaxWidth()
+            ) {
                 Column(Modifier.padding(12.dp)) {
-                    Text("Nombre completo")
-                    Text("María González")
+                    Text(
+                        "Nombre completo",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        currentUser?.name ?: "No disponible",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "Email",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        currentUser?.email ?: "No disponible",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
                 }
             }
 
-            Text("Datos físicos")
+            Text(
+                "Estadísticas de Actividad",
+                style = MaterialTheme.typography.titleMedium
+            )
 
-            Row {
-                InfoChip("Altura","165cm", BlueSoft,BlueAccent)
-                InfoChip("Peso","62kg", RedSoft,RedAccent)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                InfoChip(
+                    "Tiempo total",
+                    totalTimeFormatted,
+                    BlueSoft,
+                    BlueAccent
+                )
+                InfoChip(
+                    "Distancia total",
+                    "${String.format("%.1f", totalDistance)} km",
+                    RedSoft,
+                    RedAccent
+                )
             }
 
-            Text("Estadísticas")
-
-            Row {
-                InfoChip("Tiempo","42h", BlueSoft,BlueAccent)
-                InfoChip("KM","15.2", RedSoft,RedAccent)
+            InfoChip(
+                "Pasos totales",
+                totalSteps.toString(),
+                OrangeSoft,
+                OrangeAccent
+            )
+            
+            if (activities.isNotEmpty()) {
+                Text(
+                    "Actividades registradas: ${activities.size}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                Text(
+                    "No hay actividades registradas",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
-
-            InfoChip("Pasos","34,567",OrangeSoft,OrangeAccent)
             
             Spacer(modifier = Modifier.height(16.dp))
             

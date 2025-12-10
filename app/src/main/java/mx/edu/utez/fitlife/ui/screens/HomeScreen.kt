@@ -1,6 +1,8 @@
 package mx.edu.utez.fitlife.ui.screens
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -28,7 +30,11 @@ fun HomeScreen(navController: NavController) {
     var showDeleteDialog by remember { mutableStateOf<ActivityDay?>(null) }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        Column {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+        ) {
         Header("FitTracker")
 
         Column(
@@ -71,14 +77,14 @@ fun HomeScreen(navController: NavController) {
             }
 
             // Calcular progreso diario (basado en meta de 10,000 pasos)
-            val dailyProgress = if (activities.isNotEmpty()) {
-                val todaySteps = activities.lastOrNull()?.steps ?: 0
-                (todaySteps / 10000f).coerceAtMost(1f)
+            val todaySteps = if (activities.isNotEmpty()) {
+                activities.lastOrNull()?.steps ?: 0
             } else {
-                0.82f
+                0
             }
+            val dailyProgress = (todaySteps / 10000f).coerceAtMost(1f)
 
-            DailyGoal(dailyProgress)
+            DailyGoal(dailyProgress, todaySteps)
 
             // Tarjeta del sensor de pasos
             SensorCard(viewModel)

@@ -11,7 +11,9 @@ import androidx.compose.ui.graphics.Color
 import mx.edu.utez.fitlife.ui.theme.LightBlue
 
 @Composable
-fun DailyGoal(progress: Float) {
+fun DailyGoal(progress: Float, currentSteps: Int = 0) {
+    val goalSteps = 10000
+    val stepsRemaining = (goalSteps - currentSteps).coerceAtLeast(0)
 
     Column(
         modifier = Modifier
@@ -43,6 +45,13 @@ fun DailyGoal(progress: Float) {
 
         Spacer(Modifier.height(6.dp))
 
-        Text("1,751 steps to go", color = Color.White)
+        Text(
+            if (stepsRemaining > 0) {
+                "${stepsRemaining} pasos restantes"
+            } else {
+                "¡Meta alcanzada!"
+            },
+            color = Color.White
+        )
     }
 }

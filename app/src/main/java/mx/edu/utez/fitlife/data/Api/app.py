@@ -14,26 +14,14 @@ db.init_app(app)
 # Crear BD al inicio y agregar datos de ejemplo
 with app.app_context():
     db.create_all()
-    # Crear usuario admin por defecto si no existe
+    # Crear usuario admin por defecto si no existe (solo para desarrollo)
     if User.query.filter_by(email='admin@fitlife.com').first() is None:
         admin_user = User(name='Administrador', email='admin@fitlife.com')
         admin_user.set_password('123456')
         db.session.add(admin_user)
         db.session.commit()
-    # Agregar datos iniciales si la base de datos está vacía
-    if ActivityDay.query.count() == 0:
-        actividades_iniciales = [
-            ActivityDay(day="Lun", steps=5200, distanceKm=3.4, activeTime="45m"),
-            ActivityDay(day="Mar", steps=7600, distanceKm=5.1, activeTime="1h 10m"),
-            ActivityDay(day="Mié", steps=3200, distanceKm=2.1, activeTime="30m"),
-            ActivityDay(day="Jue", steps=8900, distanceKm=6.4, activeTime="1h 25m"),
-            ActivityDay(day="Vie", steps=10400, distanceKm=8.0, activeTime="1h 55m"),
-            ActivityDay(day="Sáb", steps=6500, distanceKm=4.8, activeTime="50m"),
-            ActivityDay(day="Dom", steps=4000, distanceKm=2.9, activeTime="35m")
-        ]
-        for act in actividades_iniciales:
-            db.session.add(act)
-        db.session.commit()
+    # NOTA: Ya no se agregan datos de ejemplo automáticamente
+    # Los usuarios deben crear sus propias actividades desde la app
 
 # ----------------------------
 # GET: Obtener todas las actividades
