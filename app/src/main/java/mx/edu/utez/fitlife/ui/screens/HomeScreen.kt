@@ -9,19 +9,21 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
-
 import mx.edu.utez.fitlife.data.model.ActivityDay
 import mx.edu.utez.fitlife.ui.components.*
 import mx.edu.utez.fitlife.ui.components.cards.DailyGoal
+import mx.edu.utez.fitlife.ui.components.cards.DEFAULT_DAILY_GOAL
 import mx.edu.utez.fitlife.ui.theme.*
 import mx.edu.utez.fitlife.viewmodel.ActivityViewModel
+import androidx.activity.ComponentActivity
 
 @Composable
 fun HomeScreen(navController: NavController) {
-    val viewModel: ActivityViewModel = viewModel()
+    val viewModel: ActivityViewModel = viewModel(LocalContext.current as ComponentActivity)
     val activities by viewModel.activities.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val error by viewModel.error.collectAsState()
@@ -76,15 +78,14 @@ fun HomeScreen(navController: NavController) {
                 parseTimeToMinutes(it.activeTime) 
             }
 
-            // Calcular progreso diario (basado en meta de 10,000 pasos)
+    val goalSteps = DEFAULT_DAILY_GOAL
+    // Calcular progreso diario (basado en meta configurable)
             val todaySteps = if (activities.isNotEmpty()) {
                 activities.lastOrNull()?.steps ?: 0
             } else {
                 0
             }
-            val dailyProgress = (todaySteps / 10000f).coerceAtMost(1f)
-
-            DailyGoal(dailyProgress, todaySteps)
+    DailyGoal(currentSteps = todaySteps, goalSteps = goalSteps)
 
             // Tarjeta del sensor de pasos
             SensorCard(viewModel)
@@ -277,15 +278,28 @@ fun HomeScreen(navController: NavController) {
  */
 fun parseTimeToMinutes(time: String): Int {
     return try {
-        if (time.contains("h")) {
-            val parts = time.split("h")
-            val hours = parts[0].trim().toInt()
-            val minutes = if (parts.size > 1) {
-                parts[1].replace("m", "").trim().toIntOrNull() ?: 0
-            } else 0
+        val trimmed = time.trim()
+        // Formato "Xh Ym"
+        if (trimmed.contains("h")) {
+            val parts = trimmed.split("h")
+            val hours = parts[0].trim().toIntOrNull() ?: 0
+            val minutes = parts.getOrNull(1)
+                ?.replace("m", "", ignoreCase = true)
+                ?.trim()
+                ?.toIntOrNull() ?: 0
             hours * 60 + minutes
+        } else if (trimmed.contains("m")) {
+            trimmed.replace("m", "", ignoreCase = true)
+                .trim()
+                .toIntOrNull() ?: 0
+        } else if (trimmed.contains("s")) {
+            // Segundos: redondear hacia arriba a 1 minuto si hay al menos 30s
+            val seconds = trimmed.replace("s", "", ignoreCase = true)
+                .trim()
+                .toIntOrNull() ?: 0
+            if (seconds >= 30) 1 else 0
         } else {
-            time.replace("m", "").trim().toIntOrNull() ?: 0
+            trimmed.toIntOrNull() ?: 0
         }
     } catch (e: Exception) {
         0

@@ -19,6 +19,7 @@ import mx.edu.utez.fitlife.ui.components.*
 import mx.edu.utez.fitlife.ui.theme.*
 import mx.edu.utez.fitlife.viewmodel.AuthViewModel
 import mx.edu.utez.fitlife.viewmodel.ActivityViewModel
+import androidx.activity.ComponentActivity
 
 @Composable
 fun ProfileScreen(navController: NavController) {
@@ -32,7 +33,7 @@ fun ProfileScreen(navController: NavController) {
         }
     )
     
-    val activityViewModel: ActivityViewModel = viewModel()
+    val activityViewModel: ActivityViewModel = viewModel(context as ComponentActivity)
     val activities by activityViewModel.activities.collectAsState()
     val currentUser by authViewModel.currentUser.collectAsState()
     

@@ -10,9 +10,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.Color
 import mx.edu.utez.fitlife.ui.theme.LightBlue
 
+const val DEFAULT_DAILY_GOAL = 6000
+
 @Composable
-fun DailyGoal(progress: Float, currentSteps: Int = 0) {
-    val goalSteps = 10000
+fun DailyGoal(
+    currentSteps: Int = 0,
+    goalSteps: Int = DEFAULT_DAILY_GOAL
+) {
+    val progress = (currentSteps / goalSteps.toFloat()).coerceIn(0f, 1f)
     val stepsRemaining = (goalSteps - currentSteps).coerceAtLeast(0)
 
     Column(

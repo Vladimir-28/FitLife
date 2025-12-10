@@ -13,6 +13,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import androidx.activity.ComponentActivity
+import androidx.compose.ui.platform.LocalContext
 import mx.edu.utez.fitlife.data.model.ActivityDay
 import mx.edu.utez.fitlife.ui.components.Header
 import mx.edu.utez.fitlife.ui.components.buttons.PrimaryButton
@@ -25,22 +27,33 @@ fun AddEditActivityScreen(
     navController: NavController,
     activityId: Int? = null
 ) {
-    val viewModel: ActivityViewModel = viewModel()
+    val viewModel: ActivityViewModel = viewModel(LocalContext.current as ComponentActivity)
+    val activities by viewModel.activities.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val error by viewModel.error.collectAsState()
 
-    // Cargar actividad si estamos editando
-    val existingActivity = remember {
-        if (activityId != null) {
-            viewModel.activities.value.firstOrNull { it.id == activityId }
-        } else null
+    LaunchedEffect(activityId) {
+        if (activityId != null && activities.isEmpty()) {
+            viewModel.loadActivities()
+        }
     }
 
     // Estados del formulario
-    var day by remember { mutableStateOf(existingActivity?.day ?: "") }
-    var steps by remember { mutableStateOf(existingActivity?.steps?.toString() ?: "") }
-    var distanceKm by remember { mutableStateOf(existingActivity?.distanceKm?.toString() ?: "") }
-    var activeTime by remember { mutableStateOf(existingActivity?.activeTime ?: "") }
+    var day by remember { mutableStateOf("") }
+    var steps by remember { mutableStateOf("") }
+    var distanceKm by remember { mutableStateOf("") }
+    var activeTime by remember { mutableStateOf("") }
+
+    // Prellenar cuando la actividad exista y se cargue
+    val existingActivity = activities.firstOrNull { it.id == activityId }
+    LaunchedEffect(existingActivity?.id) {
+        existingActivity?.let {
+            day = it.day
+            steps = it.steps.toString()
+            distanceKm = it.distanceKm.toString()
+            activeTime = it.activeTime
+        }
+    }
 
     // Estados de validación
     var dayError by remember { mutableStateOf<String?>(null) }
@@ -51,13 +64,11 @@ fun AddEditActivityScreen(
     val isEditMode = activityId != null
     val title = if (isEditMode) "Editar Actividad" else "Nueva Actividad"
     
-    var operationSuccess by remember { mutableStateOf(false) }
-
-    // Observar cuando la operación se complete exitosamente
-    LaunchedEffect(isLoading, error, operationSuccess) {
-        if (operationSuccess && !isLoading && error == null) {
-            kotlinx.coroutines.delay(500) // Pequeño delay para feedback visual
+    var submitAttempted by remember { mutableStateOf(false) }
+    LaunchedEffect(submitAttempted, isLoading, error) {
+        if (submitAttempted && !isLoading && error == null) {
             navController.popBackStack()
+            submitAttempted = false
         }
     }
 
@@ -255,7 +266,7 @@ fun AddEditActivityScreen(
                             activeTime = activeTime.trim()
                         )
 
-                        operationSuccess = true
+                        submitAttempted = true
                         if (isEditMode && activityId != null) {
                             viewModel.updateActivity(activityId, activity)
                         } else {

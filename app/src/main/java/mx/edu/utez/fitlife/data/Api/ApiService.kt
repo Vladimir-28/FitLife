@@ -25,13 +25,9 @@ interface ApiService {
 }
 
 object ApiClient {
-    // IMPORTANTE: Cambiar esta IP por la IP de tu computadora donde corre el servidor Flask
-    // Para obtener tu IP:
-    // - Windows: ipconfig (buscar "IPv4 Address")
-    // - Mac/Linux: ifconfig o ip addr
-    // - Emulador Android: usar "10.0.2.2" en lugar de localhost
-    // - Dispositivo físico: usar la IP de tu red local (ej: 192.168.1.100)
-    private const val BASE_URL = "http://192.168.0.123:5000/"
+    // 10.0.2.2 permite acceder al host desde el emulador Android.
+    // Cambia esta URL si pruebas en dispositivo físico (usa tu IP local).
+    private const val BASE_URL = "http://192.168.0.22:5000/"
 
     val instance: ApiService by lazy {
         Retrofit.Builder()
