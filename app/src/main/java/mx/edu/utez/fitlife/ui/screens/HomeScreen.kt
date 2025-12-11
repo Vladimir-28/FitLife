@@ -1,15 +1,25 @@
 package mx.edu.utez.fitlife.ui.screens
 
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
@@ -31,257 +41,435 @@ fun HomeScreen(navController: NavController) {
     val isLoading by viewModel.isLoading.collectAsState()
     val error by viewModel.error.collectAsState()
     
-    // Estado para el diálogo de confirmación de eliminación
     var showDeleteDialog by remember { mutableStateOf<ActivityDay?>(null) }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
+            modifier = Modifier.fillMaxSize()
         ) {
-        Header("FitTracker")
+            // Header mejorado
+            Header(
+                title = "FitLife",
+                subtitle = "¡Mantente activo hoy!"
+            )
 
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            // Mostrar error si existe
-            error?.let {
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        text = it,
-                        modifier = Modifier.padding(16.dp),
-                        color = MaterialTheme.colorScheme.onErrorContainer
-                    )
-                }
-            }
-
-            // Mostrar loading
-            if (isLoading) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator()
-                }
-            }
-
-            // Calcular totales desde los datos reales
-            val totalSteps = activities.sumOf { it.steps }
-            val totalDistance = activities.sumOf { it.distanceKm.toDouble() }.toFloat()
-            val totalTimeMinutes = activities.sumOf { 
-                parseTimeToMinutes(it.activeTime) 
-            }
-
-    val goalSteps = DEFAULT_DAILY_GOAL
-    // Calcular pasos del día actual sumando todas las entradas del mismo día
-    val todayKey = SimpleDateFormat("EEE", Locale.getDefault()).format(Date()).take(3).lowercase()
-    val todaySteps = activities
-        .filter { it.day.take(3).lowercase() == todayKey }
-        .sumOf { it.steps }
-    DailyGoal(currentSteps = todaySteps, goalSteps = goalSteps)
-
-            // Tarjeta del sensor de pasos
-            SensorCard(viewModel)
-
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            // Contenido scrolleable
+            LazyColumn(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                InfoChip(
-                    "Distancia",
-                    "${String.format("%.1f", totalDistance)} km",
-                    RedSoft,
-                    RedAccent
-                )
-
-                InfoChip(
-                    "Tiempo activo",
-                    formatMinutesToTime(totalTimeMinutes),
-                    BlueSoft,
-                    BlueAccent
-                )
-            }
-
-            InfoChip(
-                "Pasos",
-                totalSteps.toString(),
-                OrangeSoft,
-                OrangeAccent
-            )
-
-            Spacer(Modifier.height(8.dp))
-
-            Text(
-                "Weekly Progress",
-                style = MaterialTheme.typography.titleMedium
-            )
-
-            // Mostrar lista de actividades
-            if (activities.isNotEmpty()) {
-                activities.forEach { activity ->
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                        colors = CardDefaults.cardColors(CardBg)
+                // Error Card
+                item {
+                    AnimatedVisibility(
+                        visible = error != null,
+                        enter = fadeIn() + expandVertically(),
+                        exit = fadeOut() + shrinkVertically()
                     ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(12.dp)
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(16.dp),
+                            color = Error.copy(alpha = 0.1f)
                         ) {
                             Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
+                                modifier = Modifier.padding(16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    activity.day,
-                                    style = MaterialTheme.typography.titleMedium
-                                )
-                                Row(
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    // Botón editar
-                                    IconButton(
-                                        onClick = {
-                                            activity.id?.let { id ->
-                                                navController.navigate("edit_activity/$id")
-                                            }
-                                        },
-                                        modifier = Modifier.size(40.dp)
-                                    ) {
-                                        Icon(
-                                            Icons.Default.Edit,
-                                            contentDescription = "Editar",
-                                            tint = PrimaryBlue,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                    }
-                                    // Botón eliminar
-                                    IconButton(
-                                        onClick = {
-                                            showDeleteDialog = activity
-                                        },
-                                        modifier = Modifier.size(40.dp)
-                                    ) {
-                                        Icon(
-                                            Icons.Default.Delete,
-                                            contentDescription = "Eliminar",
-                                            tint = MaterialTheme.colorScheme.error,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                    }
-                                }
-                            }
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                Text(
-                                    "${activity.steps} pasos",
-                                    style = MaterialTheme.typography.bodyMedium
+                                Icon(
+                                    imageVector = Icons.Default.ErrorOutline,
+                                    contentDescription = null,
+                                    tint = Error
                                 )
                                 Text(
-                                    "${activity.distanceKm} km",
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                                Text(
-                                    activity.activeTime,
+                                    text = error ?: "",
+                                    color = Error,
                                     style = MaterialTheme.typography.bodyMedium
                                 )
                             }
                         }
                     }
                 }
-            } else if (!isLoading) {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(110.dp),
-                    colors = CardDefaults.cardColors(CardBg)
-                ) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
+
+                // Loading indicator
+                item {
+                    AnimatedVisibility(
+                        visible = isLoading,
+                        enter = fadeIn(),
+                        exit = fadeOut()
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(color = PrimaryBlue)
+                        }
+                    }
+                }
+
+                // Meta diaria
+                item {
+                    val todayKey = SimpleDateFormat("EEE", Locale.getDefault())
+                        .format(Date()).take(3).lowercase()
+                    val todaySteps = activities
+                        .filter { it.day.take(3).lowercase() == todayKey }
+                        .sumOf { it.steps }
+                    
+                    DailyGoal(
+                        currentSteps = todaySteps,
+                        goalSteps = DEFAULT_DAILY_GOAL
+                    )
+                }
+
+                // Sensor Card
+                item {
+                    SensorCard(viewModel)
+                }
+
+                // Stats Cards
+                item {
+                    val totalSteps = activities.sumOf { it.steps }
+                    val totalDistance = activities.sumOf { it.distanceKm.toDouble() }.toFloat()
+                    val totalTimeMinutes = activities.sumOf { parseTimeToMinutes(it.activeTime) }
+
+                    Text(
+                        text = "Resumen Total",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
+                    
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        StatCard(
+                            label = "Pasos",
+                            value = totalSteps.toString(),
+                            icon = Icons.Outlined.DirectionsWalk,
+                            color = AccentOrange,
+                            modifier = Modifier.weight(1f)
+                        )
+                        StatCard(
+                            label = "Distancia",
+                            value = "${String.format("%.2f", totalDistance)} km",
+                            icon = Icons.Outlined.Route,
+                            color = Error,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    
+                    Spacer(modifier = Modifier.height(12.dp))
+                    
+                    StatCard(
+                        label = "Tiempo activo",
+                        value = formatMinutesToTime(totalTimeMinutes),
+                        icon = Icons.Outlined.Timer,
+                        color = PrimaryBlue,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                // Sección de actividades
+                item {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            "No hay actividades registradas",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            text = "Actividades Recientes",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "${activities.size} registros",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondary
                         )
                     }
                 }
-            }
-        }
 
-            Spacer(Modifier.weight(1f))
+                // Lista de actividades
+                if (activities.isNotEmpty()) {
+                    items(
+                        items = activities,
+                        key = { it.id ?: it.hashCode() }
+                    ) { activity ->
+                        ActivityCard(
+                            activity = activity,
+                            onEdit = {
+                                activity.id?.let { id ->
+                                    navController.navigate("edit_activity/$id")
+                                }
+                            },
+                            onDelete = {
+                                showDeleteDialog = activity
+                            }
+                        )
+                    }
+                } else if (!isLoading) {
+                    item {
+                        EmptyStateCard()
+                    }
+                }
+
+                // Espacio para el FAB
+                item {
+                    Spacer(modifier = Modifier.height(80.dp))
+                }
+            }
+
+            // Bottom Navigation
             BottomPillBar(navController, "home")
         }
 
-        // Floating Action Button para crear nueva actividad
+        // FAB
         FloatingActionButton(
-            onClick = {
-                navController.navigate("add_activity")
-            },
+            onClick = { navController.navigate("add_activity") },
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(16.dp),
-            containerColor = PrimaryBlue
+                .padding(end = 16.dp, bottom = 100.dp),
+            containerColor = PrimaryBlue,
+            contentColor = Color.White,
+            shape = CircleShape
         ) {
             Icon(
                 Icons.Default.Add,
                 contentDescription = "Agregar actividad",
-                tint = Color.White
+                modifier = Modifier.size(28.dp)
             )
         }
     }
 
-    // Diálogo de confirmación para eliminar
+    // Delete Dialog
     showDeleteDialog?.let { activityToDelete ->
         AlertDialog(
             onDismissRequest = { showDeleteDialog = null },
-            title = { Text("Eliminar Actividad") },
-            text = { 
-                Text("¿Estás seguro de que deseas eliminar la actividad del ${activityToDelete.day}?")
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.DeleteOutline,
+                    contentDescription = null,
+                    tint = Error,
+                    modifier = Modifier.size(32.dp)
+                )
+            },
+            title = {
+                Text(
+                    "Eliminar Actividad",
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text("¿Estás seguro de que deseas eliminar la actividad del ${activityToDelete.day}? Esta acción no se puede deshacer.")
             },
             confirmButton = {
-                TextButton(
+                Button(
                     onClick = {
                         activityToDelete.id?.let { id ->
                             viewModel.deleteActivity(id)
                         }
                         showDeleteDialog = null
-                    }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Error)
                 ) {
-                    Text("Eliminar", color = MaterialTheme.colorScheme.error)
+                    Text("Eliminar")
                 }
             },
             dismissButton = {
-                TextButton(
-                    onClick = { showDeleteDialog = null }
-                ) {
+                TextButton(onClick = { showDeleteDialog = null }) {
                     Text("Cancelar")
                 }
-            }
+            },
+            shape = RoundedCornerShape(24.dp)
         )
     }
 }
 
-/**
- * Convierte un string de tiempo (ej: "1h 30m" o "45m") a minutos
- */
+@Composable
+private fun ActivityCard(
+    activity: ActivityDay,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .shadow(
+                elevation = 4.dp,
+                shape = RoundedCornerShape(20.dp),
+                spotColor = PrimaryBlue.copy(alpha = 0.1f)
+            ),
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surface
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(
+                                brush = Brush.linearGradient(
+                                    colors = listOf(PrimaryBlue, AccentPurple)
+                                )
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = activity.day.take(3).uppercase(),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
+                    
+                    Column {
+                        Text(
+                            text = activity.day,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = "${activity.steps} pasos",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondary
+                        )
+                    }
+                }
+                
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    IconButton(
+                        onClick = onEdit,
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(
+                            Icons.Outlined.Edit,
+                            contentDescription = "Editar",
+                            tint = PrimaryBlue,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    IconButton(
+                        onClick = onDelete,
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(
+                            Icons.Outlined.Delete,
+                            contentDescription = "Eliminar",
+                            tint = Error,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+            }
+            
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = 12.dp),
+                color = DividerColor
+            )
+            
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceAround
+            ) {
+                ActivityStat(
+                    icon = Icons.Outlined.Route,
+                    value = "${activity.distanceKm} km",
+                    color = Error
+                )
+                ActivityStat(
+                    icon = Icons.Outlined.Timer,
+                    value = activity.activeTime,
+                    color = PrimaryBlue
+                )
+                ActivityStat(
+                    icon = Icons.Outlined.LocalFireDepartment,
+                    value = "${(activity.steps * 0.04).toInt()} cal",
+                    color = AccentOrange
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ActivityStat(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    value: String,
+    color: Color
+) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = color,
+            modifier = Modifier.size(18.dp)
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            color = TextPrimary
+        )
+    }
+}
+
+@Composable
+private fun EmptyStateCard() {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.DirectionsRun,
+                contentDescription = null,
+                tint = TextTertiary,
+                modifier = Modifier.size(64.dp)
+            )
+            Text(
+                text = "Sin actividades",
+                style = MaterialTheme.typography.titleMedium,
+                color = TextSecondary
+            )
+            Text(
+                text = "Usa el sensor de pasos o agrega una actividad manualmente",
+                style = MaterialTheme.typography.bodySmall,
+                color = TextTertiary
+            )
+        }
+    }
+}
+
 fun parseTimeToMinutes(time: String): Int {
     return try {
         val trimmed = time.trim()
-        // Formato "Xh Ym"
         if (trimmed.contains("h")) {
             val parts = trimmed.split("h")
             val hours = parts[0].trim().toIntOrNull() ?: 0
@@ -295,7 +483,6 @@ fun parseTimeToMinutes(time: String): Int {
                 .trim()
                 .toIntOrNull() ?: 0
         } else if (trimmed.contains("s")) {
-            // Segundos: redondear hacia arriba a 1 minuto si hay al menos 30s
             val seconds = trimmed.replace("s", "", ignoreCase = true)
                 .trim()
                 .toIntOrNull() ?: 0
@@ -308,9 +495,6 @@ fun parseTimeToMinutes(time: String): Int {
     }
 }
 
-/**
- * Convierte minutos a formato legible (ej: "2h 15m" o "45m")
- */
 fun formatMinutesToTime(minutes: Int): String {
     val hours = minutes / 60
     val mins = minutes % 60

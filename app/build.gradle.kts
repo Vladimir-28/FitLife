@@ -63,6 +63,15 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.9.4")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.4")
     implementation(libs.androidx.compose.foundation)
+    
+    // Google Play Services para ubicación GPS
+    implementation("com.google.android.gms:play-services-location:21.0.1")
+    
+    // Material Icons Extended
+    implementation("androidx.compose.material:material-icons-extended:1.6.0")
+    
+    // Animaciones
+    implementation("androidx.compose.animation:animation:1.6.0")
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

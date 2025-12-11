@@ -1,25 +1,35 @@
 package mx.edu.utez.fitlife.ui.screens
 
+import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import androidx.activity.ComponentActivity
-import androidx.compose.ui.platform.LocalContext
 import mx.edu.utez.fitlife.data.model.ActivityDay
-import mx.edu.utez.fitlife.ui.components.Header
-import mx.edu.utez.fitlife.ui.components.buttons.PrimaryButton
-import mx.edu.utez.fitlife.ui.components.inputs.TextInput
-import mx.edu.utez.fitlife.ui.theme.PrimaryBlue
+import mx.edu.utez.fitlife.ui.theme.*
 import mx.edu.utez.fitlife.viewmodel.ActivityViewModel
 
 @Composable
@@ -31,6 +41,7 @@ fun AddEditActivityScreen(
     val activities by viewModel.activities.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val error by viewModel.error.collectAsState()
+    val focusManager = LocalFocusManager.current
 
     LaunchedEffect(activityId) {
         if (activityId != null && activities.isEmpty()) {
@@ -44,7 +55,7 @@ fun AddEditActivityScreen(
     var distanceKm by remember { mutableStateOf("") }
     var activeTime by remember { mutableStateOf("") }
 
-    // Prellenar cuando la actividad exista y se cargue
+    // Prellenar cuando la actividad exista
     val existingActivity = activities.firstOrNull { it.id == activityId }
     LaunchedEffect(existingActivity?.id) {
         existingActivity?.let {
@@ -72,157 +83,251 @@ fun AddEditActivityScreen(
         }
     }
 
-    Column {
-        // Header personalizado
-        Row(
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        // Header con gradiente
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(PrimaryBlue)
-                .padding(18.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = { navController.popBackStack() }) {
-                Icon(
-                    Icons.Default.ArrowBack,
-                    contentDescription = "Volver",
-                    tint = androidx.compose.ui.graphics.Color.White
+                .background(
+                    brush = Brush.horizontalGradient(
+                        colors = if (isEditMode) {
+                            listOf(AccentOrange, Color(0xFFEA580C))
+                        } else {
+                            listOf(SecondaryGreen, SecondaryGreenDark)
+                        }
+                    )
                 )
+                .padding(horizontal = 8.dp, vertical = 16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = { navController.popBackStack() }) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Volver",
+                        tint = Color.White
+                    )
+                }
+                
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+                
+                Spacer(modifier = Modifier.width(48.dp))
             }
-            Text(
-                title,
-                color = androidx.compose.ui.graphics.Color.White,
-                style = MaterialTheme.typography.titleLarge
-            )
-            Spacer(modifier = Modifier.width(48.dp)) // Balancear el espacio
         }
 
+        // Formulario
         Column(
             modifier = Modifier
-                .fillMaxWidth()
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
                 .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Mostrar error global si existe
-            error?.let {
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer
-                    ),
-                    modifier = Modifier.fillMaxWidth()
+            // Error global
+            AnimatedVisibility(
+                visible = error != null,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
+            ) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    color = Error.copy(alpha = 0.1f)
                 ) {
-                    Text(
-                        text = it,
+                    Row(
                         modifier = Modifier.padding(16.dp),
-                        color = MaterialTheme.colorScheme.onErrorContainer
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ErrorOutline,
+                            contentDescription = null,
+                            tint = Error
+                        )
+                        Text(
+                            text = error ?: "",
+                            color = Error,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+            }
+
+            // Icono descriptivo
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(80.dp)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(
+                            if (isEditMode) AccentOrange.copy(alpha = 0.1f)
+                            else SecondaryGreen.copy(alpha = 0.1f)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = if (isEditMode) Icons.Default.Edit else Icons.Default.DirectionsRun,
+                        contentDescription = null,
+                        tint = if (isEditMode) AccentOrange else SecondaryGreen,
+                        modifier = Modifier.size(44.dp)
                     )
                 }
             }
 
             // Campo: Día
-            Column {
-                Text(
-                    "Día de la semana",
-                    style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-                OutlinedTextField(
-                    value = day,
-                    onValueChange = {
-                        day = it
-                        dayError = null
-                    },
-                    placeholder = { Text("Ej: Lun, Mar, Mié...") },
-                    label = { Text("Día") },
-                    modifier = Modifier.fillMaxWidth(),
-                    isError = dayError != null,
-                    supportingText = dayError?.let { { Text(it) } }
-                )
-            }
+            OutlinedTextField(
+                value = day,
+                onValueChange = {
+                    day = it
+                    dayError = null
+                },
+                label = { Text("Día de la semana") },
+                placeholder = { Text("Ej: Lunes, Martes...") },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Outlined.CalendarToday,
+                        contentDescription = null,
+                        tint = if (dayError != null) Error else TextSecondary
+                    )
+                },
+                modifier = Modifier.fillMaxWidth(),
+                isError = dayError != null,
+                supportingText = dayError?.let { { Text(it) } },
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Text,
+                    imeAction = ImeAction.Next
+                ),
+                keyboardActions = KeyboardActions(
+                    onNext = { focusManager.moveFocus(FocusDirection.Down) }
+                ),
+                shape = RoundedCornerShape(16.dp),
+                singleLine = true
+            )
 
             // Campo: Pasos
-            Column {
-                Text(
-                    "Pasos",
-                    style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-                OutlinedTextField(
-                    value = steps,
-                    onValueChange = {
-                        if (it.all { char -> char.isDigit() }) {
-                            steps = it
-                            stepsError = null
+            OutlinedTextField(
+                value = steps,
+                onValueChange = {
+                    if (it.all { char -> char.isDigit() }) {
+                        steps = it
+                        stepsError = null
+                        
+                        // Auto-calcular distancia
+                        it.toIntOrNull()?.let { stepsInt ->
+                            val calculatedDistance = stepsInt * 0.00075f
+                            distanceKm = String.format("%.2f", calculatedDistance)
                         }
-                    },
-                    placeholder = { Text("Ej: 5000") },
-                    label = { Text("Número de pasos") },
-                    modifier = Modifier.fillMaxWidth(),
-                    isError = stepsError != null,
-                    supportingText = stepsError?.let { { Text(it) } },
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Number
+                    }
+                },
+                label = { Text("Número de pasos") },
+                placeholder = { Text("Ej: 5000") },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Outlined.DirectionsWalk,
+                        contentDescription = null,
+                        tint = if (stepsError != null) Error else TextSecondary
                     )
-                )
-            }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                isError = stepsError != null,
+                supportingText = stepsError?.let { { Text(it) } } ?: {
+                    Text("La distancia se calculará automáticamente")
+                },
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Number,
+                    imeAction = ImeAction.Next
+                ),
+                keyboardActions = KeyboardActions(
+                    onNext = { focusManager.moveFocus(FocusDirection.Down) }
+                ),
+                shape = RoundedCornerShape(16.dp),
+                singleLine = true
+            )
 
             // Campo: Distancia
-            Column {
-                Text(
-                    "Distancia (km)",
-                    style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-                OutlinedTextField(
-                    value = distanceKm,
-                    onValueChange = {
-                        if (it.isEmpty() || it.matches(Regex("^\\d+(\\.\\d*)?$"))) {
-                            distanceKm = it
-                            distanceError = null
-                        }
-                    },
-                    placeholder = { Text("Ej: 3.5") },
-                    label = { Text("Distancia en kilómetros") },
-                    modifier = Modifier.fillMaxWidth(),
-                    isError = distanceError != null,
-                    supportingText = distanceError?.let { { Text(it) } },
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Decimal
+            OutlinedTextField(
+                value = distanceKm,
+                onValueChange = {
+                    if (it.isEmpty() || it.matches(Regex("^\\d+(\\.\\d*)?$"))) {
+                        distanceKm = it
+                        distanceError = null
+                    }
+                },
+                label = { Text("Distancia (km)") },
+                placeholder = { Text("Ej: 3.5") },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Outlined.Route,
+                        contentDescription = null,
+                        tint = if (distanceError != null) Error else TextSecondary
                     )
-                )
-            }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                isError = distanceError != null,
+                supportingText = distanceError?.let { { Text(it) } },
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Decimal,
+                    imeAction = ImeAction.Next
+                ),
+                keyboardActions = KeyboardActions(
+                    onNext = { focusManager.moveFocus(FocusDirection.Down) }
+                ),
+                shape = RoundedCornerShape(16.dp),
+                singleLine = true
+            )
 
             // Campo: Tiempo activo
-            Column {
-                Text(
-                    "Tiempo activo",
-                    style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-                OutlinedTextField(
-                    value = activeTime,
-                    onValueChange = {
-                        activeTime = it
-                        timeError = null
-                    },
-                    placeholder = { Text("Ej: 45m o 1h 30m") },
-                    label = { Text("Tiempo activo") },
-                    modifier = Modifier.fillMaxWidth(),
-                    isError = timeError != null,
-                    supportingText = timeError?.let { { Text(it) } }
-                )
-            }
+            OutlinedTextField(
+                value = activeTime,
+                onValueChange = {
+                    activeTime = it
+                    timeError = null
+                },
+                label = { Text("Tiempo activo") },
+                placeholder = { Text("Ej: 45m o 1h 30m") },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Outlined.Timer,
+                        contentDescription = null,
+                        tint = if (timeError != null) Error else TextSecondary
+                    )
+                },
+                modifier = Modifier.fillMaxWidth(),
+                isError = timeError != null,
+                supportingText = timeError?.let { { Text(it) } },
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Text,
+                    imeAction = ImeAction.Done
+                ),
+                keyboardActions = KeyboardActions(
+                    onDone = { focusManager.clearFocus() }
+                ),
+                shape = RoundedCornerShape(16.dp),
+                singleLine = true
+            )
 
             Spacer(modifier = Modifier.height(16.dp))
 
             // Botón de guardar
-            PrimaryButton(
-                text = if (isEditMode) "Actualizar Actividad" else "Crear Actividad",
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp),
+            Button(
                 onClick = {
-                    // Validar campos
                     var hasError = false
 
                     if (day.isBlank()) {
@@ -273,21 +378,53 @@ fun AddEditActivityScreen(
                             viewModel.createActivity(activity)
                         }
                     }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                enabled = !isLoading,
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (isEditMode) AccentOrange else SecondaryGreen
+                )
+            ) {
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        color = Color.White,
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Icon(
+                        imageVector = if (isEditMode) Icons.Default.Save else Icons.Default.Add,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = if (isEditMode) "Actualizar Actividad" else "Crear Actividad",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
-            )
-
-            // Mostrar loading
-            if (isLoading) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator()
-                }
+            }
+            
+            // Botón cancelar
+            OutlinedButton(
+                onClick = { navController.popBackStack() },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = TextSecondary
+                )
+            ) {
+                Text(
+                    text = "Cancelar",
+                    style = MaterialTheme.typography.titleMedium
+                )
             }
         }
     }
 }
-

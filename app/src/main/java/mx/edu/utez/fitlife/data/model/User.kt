@@ -13,13 +13,15 @@ data class User(
 
 data class LoginRequest(
     val email: String,
-    val password: String
+    val password: String,
+    val deviceId: String? = null
 )
 
 data class RegisterRequest(
     val name: String,
     val email: String,
-    val password: String
+    val password: String,
+    val deviceId: String? = null
 )
 
 data class AuthResponse(
@@ -31,3 +33,47 @@ data class AuthResponse(
     val token: String
 )
 
+data class ForgotPasswordRequest(
+    val email: String
+)
+
+data class ForgotPasswordResponse(
+    @SerializedName("message")
+    val message: String,
+    @SerializedName("success")
+    val success: Boolean,
+    @SerializedName("resetToken")
+    val resetToken: String? = null,
+    @SerializedName("email")
+    val email: String? = null
+)
+
+data class VerifyTokenRequest(
+    val email: String,
+    val token: String
+)
+
+data class VerifyTokenResponse(
+    @SerializedName("message")
+    val message: String,
+    @SerializedName("valid")
+    val valid: Boolean
+)
+
+data class ResetPasswordRequest(
+    val email: String,
+    val token: String,
+    val newPassword: String
+)
+
+data class ResetPasswordResponse(
+    @SerializedName("message")
+    val message: String,
+    @SerializedName("success")
+    val success: Boolean
+)
+
+data class ErrorResponse(
+    @SerializedName("error")
+    val error: String
+)

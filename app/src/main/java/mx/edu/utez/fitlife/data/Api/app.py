@@ -20,15 +20,20 @@ with app.app_context():
         admin_user.set_password('123456')
         db.session.add(admin_user)
         db.session.commit()
-    # NOTA: Ya no se agregan datos de ejemplo automáticamente
-    # Los usuarios deben crear sus propias actividades desde la app
 
 # ----------------------------
 # GET: Obtener todas las actividades
 # ----------------------------
 @app.route('/activities', methods=['GET'])
 def get_activities():
-    activities = ActivityDay.query.all()
+    # Obtener userId del header si está presente
+    user_id = request.headers.get('X-User-Id')
+    
+    if user_id:
+        activities = ActivityDay.query.filter_by(userId=int(user_id)).all()
+    else:
+        activities = ActivityDay.query.all()
+    
     return jsonify([{
         'id': a.id,
         'day': a.day,
@@ -44,6 +49,7 @@ def get_activities():
 def create_activity():
     try:
         data = request.get_json()
+        user_id = request.headers.get('X-User-Id')
         
         if not data:
             return jsonify({'error': 'No se recibieron datos'}), 400
@@ -56,7 +62,8 @@ def create_activity():
             day=data.get('day'),
             steps=data.get('steps'),
             distanceKm=data.get('distanceKm'),
-            activeTime=data.get('activeTime')
+            activeTime=data.get('activeTime'),
+            userId=int(user_id) if user_id else None
         )
         db.session.add(nueva_actividad)
         db.session.commit()
@@ -144,6 +151,7 @@ def register():
         name = data.get('name', '').strip()
         email = data.get('email', '').strip().lower()
         password = data.get('password', '')
+        device_id = data.get('deviceId', '').strip()
         
         # Validaciones
         if not name or len(name) < 3:
@@ -159,8 +167,14 @@ def register():
         if User.query.filter_by(email=email).first():
             return jsonify({'error': 'El email ya está registrado'}), 400
         
+        # Verificar si el dispositivo ya tiene una cuenta
+        if device_id:
+            existing_device = User.query.filter_by(device_id=device_id).first()
+            if existing_device:
+                return jsonify({'error': 'Este dispositivo ya tiene una cuenta asociada. Solo se permite una cuenta por dispositivo.'}), 400
+        
         # Crear nuevo usuario
-        new_user = User(name=name, email=email)
+        new_user = User(name=name, email=email, device_id=device_id if device_id else None)
         new_user.set_password(password)
         db.session.add(new_user)
         db.session.commit()
@@ -185,6 +199,7 @@ def login():
         
         email = data.get('email', '').strip().lower()
         password = data.get('password', '')
+        device_id = data.get('deviceId', '').strip()
         
         if not email or not password:
             return jsonify({'error': 'Email y contraseña son requeridos'}), 400
@@ -195,10 +210,169 @@ def login():
         if not user or not user.check_password(password):
             return jsonify({'error': 'Credenciales incorrectas'}), 401
         
+        # Verificar dispositivo
+        if device_id:
+            # Si el usuario ya tiene un dispositivo asociado
+            if user.device_id and user.device_id != device_id:
+                return jsonify({'error': 'Esta cuenta ya está vinculada a otro dispositivo. Solo se permite iniciar sesión desde el dispositivo original.'}), 403
+            
+            # Si es un nuevo dispositivo, verificar que no esté asociado a otra cuenta
+            if not user.device_id:
+                existing_device = User.query.filter(User.device_id == device_id, User.id != user.id).first()
+                if existing_device:
+                    return jsonify({'error': 'Este dispositivo ya tiene otra cuenta asociada.'}), 403
+                # Vincular dispositivo a la cuenta
+                user.device_id = device_id
+                db.session.commit()
+        
         return jsonify({
             'message': 'Login exitoso',
             'user': user.to_dict(),
             'token': str(user.id)  # Token simple (en producción usar JWT)
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# ----------------------------
+# RECUPERACIÓN DE CONTRASEÑA
+# ----------------------------
+
+# POST: Solicitar recuperación de contraseña
+@app.route('/auth/forgot-password', methods=['POST'])
+def forgot_password():
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'error': 'No se recibieron datos'}), 400
+        
+        email = data.get('email', '').strip().lower()
+        
+        if not email:
+            return jsonify({'error': 'El email es requerido'}), 400
+        
+        user = User.query.filter_by(email=email).first()
+        
+        if not user:
+            # Por seguridad, no revelamos si el email existe o no
+            return jsonify({
+                'message': 'Si el email existe, recibirás instrucciones para restablecer tu contraseña.',
+                'success': True
+            }), 200
+        
+        # Generar token de recuperación
+        reset_token = user.generate_reset_token()
+        db.session.commit()
+        
+        # En producción, aquí enviarías el email con el token
+        # Por ahora, retornamos el token para pruebas
+        return jsonify({
+            'message': 'Se ha generado un código de recuperación.',
+            'success': True,
+            'resetToken': reset_token,  # Solo para desarrollo
+            'email': email
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# POST: Verificar token de recuperación
+@app.route('/auth/verify-reset-token', methods=['POST'])
+def verify_reset_token():
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'error': 'No se recibieron datos'}), 400
+        
+        email = data.get('email', '').strip().lower()
+        token = data.get('token', '').strip()
+        
+        if not email or not token:
+            return jsonify({'error': 'Email y token son requeridos'}), 400
+        
+        user = User.query.filter_by(email=email).first()
+        
+        if not user or not user.verify_reset_token(token):
+            return jsonify({'error': 'Token inválido o expirado'}), 400
+        
+        return jsonify({
+            'message': 'Token válido',
+            'valid': True
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# POST: Restablecer contraseña
+@app.route('/auth/reset-password', methods=['POST'])
+def reset_password():
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'error': 'No se recibieron datos'}), 400
+        
+        email = data.get('email', '').strip().lower()
+        token = data.get('token', '').strip()
+        new_password = data.get('newPassword', '')
+        
+        if not email or not token or not new_password:
+            return jsonify({'error': 'Todos los campos son requeridos'}), 400
+        
+        if len(new_password) < 6:
+            return jsonify({'error': 'La contraseña debe tener al menos 6 caracteres'}), 400
+        
+        user = User.query.filter_by(email=email).first()
+        
+        if not user or not user.verify_reset_token(token):
+            return jsonify({'error': 'Token inválido o expirado'}), 400
+        
+        # Actualizar contraseña
+        user.set_password(new_password)
+        user.clear_reset_token()
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Contraseña actualizada correctamente',
+            'success': True
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# ----------------------------
+# GESTIÓN DE DISPOSITIVOS
+# ----------------------------
+
+# POST: Desvincular dispositivo (para soporte)
+@app.route('/auth/unlink-device', methods=['POST'])
+def unlink_device():
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'error': 'No se recibieron datos'}), 400
+        
+        email = data.get('email', '').strip().lower()
+        password = data.get('password', '')
+        
+        if not email or not password:
+            return jsonify({'error': 'Email y contraseña son requeridos'}), 400
+        
+        user = User.query.filter_by(email=email).first()
+        
+        if not user or not user.check_password(password):
+            return jsonify({'error': 'Credenciales incorrectas'}), 401
+        
+        # Desvincular dispositivo
+        user.device_id = None
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Dispositivo desvinculado correctamente',
+            'success': True
         }), 200
         
     except Exception as e:

@@ -1,23 +1,38 @@
 package mx.edu.utez.fitlife.ui.components
 
 import android.Manifest
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.IBinder
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import mx.edu.utez.fitlife.data.model.ActivityDay
-import mx.edu.utez.fitlife.data.sensor.StepSensorManager
+import mx.edu.utez.fitlife.service.StepCounterService
 import mx.edu.utez.fitlife.ui.theme.*
 import mx.edu.utez.fitlife.viewmodel.ActivityViewModel
 import java.text.SimpleDateFormat
@@ -26,298 +41,413 @@ import java.util.*
 @Composable
 fun SensorCard(viewModel: ActivityViewModel) {
     val context = LocalContext.current
-    val sensorManager = remember { StepSensorManager(context) }
     
-    val stepCount by sensorManager.stepCount.collectAsState()
-    val isSensorAvailable by sensorManager.isSensorAvailable.collectAsState()
-    val isListening = remember { mutableStateOf(false) }
+    // Estados del servicio
+    var stepService by remember { mutableStateOf<StepCounterService?>(null) }
+    var isBound by remember { mutableStateOf(false) }
     
-    var startTime by remember { mutableStateOf<Long?>(null) }
-    var elapsedTime by remember { mutableStateOf(0L) }
-    var hasPermission by remember { mutableStateOf(false) }
-    var showPermissionRationale by remember { mutableStateOf(false) }
+    // Estados observables del servicio
+    val stepCount by stepService?.stepCount?.collectAsState() ?: remember { mutableStateOf(0) }.let { it }
+    val distance by stepService?.distance?.collectAsState() ?: remember { mutableStateOf(0.0) }.let { it }
+    val elapsedTime by stepService?.elapsedTime?.collectAsState() ?: remember { mutableStateOf(0L) }.let { it }
+    val isRunning by stepService?.isRunning?.collectAsState() ?: remember { mutableStateOf(false) }.let { it }
+    val isSensorAvailable by stepService?.isSensorAvailable?.collectAsState() ?: remember { mutableStateOf(true) }.let { it }
     
-    // Verificar permiso al iniciar
-    val hasActivityRecognitionPermission = remember {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+    // Permisos
+    var hasActivityPermission by remember { mutableStateOf(false) }
+    var hasLocationPermission by remember { mutableStateOf(false) }
+    var hasNotificationPermission by remember { mutableStateOf(false) }
+    var showPermissionDialog by remember { mutableStateOf(false) }
+    
+    // Service Connection
+    val serviceConnection = remember {
+        object : ServiceConnection {
+            override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
+                val binder = service as StepCounterService.LocalBinder
+                stepService = binder.getService()
+                isBound = true
+            }
+            
+            override fun onServiceDisconnected(name: ComponentName?) {
+                stepService = null
+                isBound = false
+            }
+        }
+    }
+    
+    // Permission launchers
+    val activityPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        hasActivityPermission = isGranted
+    }
+    
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        hasLocationPermission = permissions.values.any { it }
+    }
+    
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        hasNotificationPermission = isGranted
+    }
+    
+    // Check permissions on start
+    LaunchedEffect(Unit) {
+        hasActivityPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             ContextCompat.checkSelfPermission(
                 context,
                 Manifest.permission.ACTIVITY_RECOGNITION
             ) == PackageManager.PERMISSION_GRANTED
-        } else {
-            true // No se requiere permiso en versiones anteriores
+        } else true
+        
+        hasLocationPermission = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+        
+        hasNotificationPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+        } else true
+        
+        // Bind to service
+        Intent(context, StepCounterService::class.java).also { intent ->
+            context.bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
         }
     }
     
-    // Launcher para solicitar permiso
-    val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted: Boolean ->
-        hasPermission = isGranted
-        if (isGranted) {
-            showPermissionRationale = false
-        } else {
-            showPermissionRationale = true
-        }
-    }
-    
-    // Inicializar estado de permiso
-    LaunchedEffect(Unit) {
-        hasPermission = hasActivityRecognitionPermission
-    }
-    
-    // Actualizar tiempo transcurrido cada segundo solo cuando está escuchando
-    LaunchedEffect(isListening.value) {
-        if (isListening.value && startTime != null) {
-            while (isListening.value) {
-                kotlinx.coroutines.delay(1000)
-                startTime?.let {
-                    elapsedTime = System.currentTimeMillis() - it
-                }
-            }
-        }
-    }
-    
-    // Limpiar al desmontar
+    // Cleanup
     DisposableEffect(Unit) {
         onDispose {
-            sensorManager.stopListening()
-        }
-    }
-    
-    // Función para verificar y solicitar permiso antes de iniciar
-    fun requestPermissionIfNeeded(onPermissionGranted: () -> Unit) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            if (hasPermission) {
-                onPermissionGranted()
-            } else {
-                permissionLauncher.launch(Manifest.permission.ACTIVITY_RECOGNITION)
+            if (isBound) {
+                context.unbindService(serviceConnection)
             }
-        } else {
-            // No se requiere permiso en versiones anteriores a Android 10
-            onPermissionGranted()
         }
     }
     
-    Card(
+    // Animación de pulso cuando está activo
+    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+    val pulseAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.6f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulse"
+    )
+
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = LightBlue
-        )
+            .shadow(
+                elevation = 8.dp,
+                shape = RoundedCornerShape(24.dp),
+                spotColor = if (isRunning) SecondaryGreen.copy(alpha = 0.3f)
+                           else PrimaryBlue.copy(alpha = 0.2f)
+            ),
+        shape = RoundedCornerShape(24.dp),
+        color = Color.Transparent
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    "Sensor de Pasos",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = Color.White
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    brush = Brush.linearGradient(
+                        colors = if (isRunning) {
+                            listOf(SecondaryGreen, SecondaryGreenDark)
+                        } else {
+                            listOf(AccentPurple, Color(0xFF7C3AED))
+                        }
+                    )
                 )
-                
+                .padding(20.dp)
+        ) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Header
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    if (isSensorAvailable) {
-                        Icon(
-                            Icons.Default.CheckCircle,
-                            contentDescription = "Sensor disponible",
-                            tint = Color.Green,
-                            modifier = Modifier.size(20.dp)
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Indicador de estado con animación
+                        Box(
+                            modifier = Modifier
+                                .size(12.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (isRunning) Color.White.copy(alpha = pulseAlpha)
+                                    else Color.White.copy(alpha = 0.5f)
+                                )
                         )
-                    } else {
-                        Icon(
-                            Icons.Default.Warning,
-                            contentDescription = "Sensor no disponible",
-                            tint = Color.Yellow,
-                            modifier = Modifier.size(20.dp)
-                        )
+                        
+                        Column {
+                            Text(
+                                text = if (isRunning) "Rastreando actividad" else "Sensor de Pasos",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                            Text(
+                                text = if (isRunning) "En segundo plano" else "Toca para iniciar",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.White.copy(alpha = 0.8f)
+                            )
+                        }
                     }
                     
-                    IconButton(
-                        onClick = {
-                            if (isListening.value) {
-                                // Pausar: detener sensor y tiempo
-                                sensorManager.stopListening()
-                                isListening.value = false
-                            } else {
-                                // Verificar permiso antes de iniciar
-                                requestPermissionIfNeeded {
-                                    // Iniciar: resetear contador, iniciar sensor y tiempo
-                                    sensorManager.resetStepCount()  // Resetear pasos antes de iniciar
-                                    startTime = System.currentTimeMillis()  // Iniciar tiempo
-                                    elapsedTime = 0L  // Resetear tiempo transcurrido
-                                    sensorManager.startListening()  // Iniciar sensor
-                                    isListening.value = true
-                                    showPermissionRationale = false
-                                }
-                            }
-                        },
-                        modifier = Modifier.size(40.dp)
-                    ) {
+                    // Sensor status
+                    if (isSensorAvailable) {
                         Icon(
-                            if (isListening.value) Icons.Default.Close else Icons.Default.PlayArrow,
-                            contentDescription = if (isListening.value) "Pausar" else "Iniciar",
+                            imageVector = Icons.Outlined.Sensors,
+                            contentDescription = "Sensor disponible",
                             tint = Color.White,
                             modifier = Modifier.size(24.dp)
                         )
                     }
                 }
-            }
-            
-            // Mostrar mensaje si no hay permiso
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && !hasPermission && showPermissionRationale) {
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
-                        modifier = Modifier.padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            "Permiso requerido",
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.onErrorContainer
-                        )
-                        Text(
-                            "Se necesita el permiso de reconocimiento de actividad para detectar pasos.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onErrorContainer
-                        )
-                        Button(
-                            onClick = {
-                                requestPermissionIfNeeded {
-                                    hasPermission = true
-                                    showPermissionRationale = false
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.error
-                            )
-                        ) {
-                            Text("Conceder permiso")
-                        }
-                    }
-                }
-                Spacer(modifier = Modifier.height(8.dp))
-            }
-            
-            if (isSensorAvailable && (hasPermission || Build.VERSION.SDK_INT < Build.VERSION_CODES.Q)) {
+                
+                // Stats Row
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Column {
-                        Text(
-                            "Pasos detectados",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color.White.copy(alpha = 0.8f)
+                    // Pasos
+                    StatItem(
+                        icon = Icons.Outlined.DirectionsWalk,
+                        value = stepCount.toString(),
+                        label = "Pasos"
+                    )
+                    
+                    // Distancia
+                    StatItem(
+                        icon = Icons.Outlined.Route,
+                        value = String.format("%.2f", distance),
+                        label = "km"
+                    )
+                    
+                    // Tiempo
+                    StatItem(
+                        icon = Icons.Outlined.Timer,
+                        value = formatElapsedTime(elapsedTime),
+                        label = "Tiempo"
+                    )
+                }
+                
+                // Botones de acción
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // Botón principal (Iniciar/Detener)
+                    Button(
+                        onClick = {
+                            if (!hasActivityPermission || !hasNotificationPermission) {
+                                showPermissionDialog = true
+                                return@Button
+                            }
+                            
+                            if (isRunning) {
+                                stepService?.stopTracking()
+                            } else {
+                                // Request location permission if not granted
+                                if (!hasLocationPermission) {
+                                    locationPermissionLauncher.launch(
+                                        arrayOf(
+                                            Manifest.permission.ACCESS_FINE_LOCATION,
+                                            Manifest.permission.ACCESS_COARSE_LOCATION
+                                        )
+                                    )
+                                }
+                                
+                                // Start service
+                                Intent(context, StepCounterService::class.java).apply {
+                                    action = StepCounterService.ACTION_START
+                                }.also { intent ->
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                        context.startForegroundService(intent)
+                                    } else {
+                                        context.startService(intent)
+                                    }
+                                }
+                                
+                                stepService?.startTracking()
+                            }
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(50.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color.White,
+                            contentColor = if (isRunning) Error else SecondaryGreen
+                        ),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isRunning) Icons.Default.Stop else Icons.Default.PlayArrow,
+                            contentDescription = null,
+                            modifier = Modifier.size(24.dp)
                         )
+                        Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            stepCount.toString(),
-                            style = MaterialTheme.typography.headlineMedium,
-                            color = Color.White
+                            text = if (isRunning) "Detener" else "Iniciar",
+                            fontWeight = FontWeight.Bold
                         )
                     }
                     
-                    Column(horizontalAlignment = Alignment.End) {
-                        Text(
-                            "Tiempo",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color.White.copy(alpha = 0.8f)
-                        )
-                        Text(
-                            formatElapsedTime(elapsedTime),
-                            style = MaterialTheme.typography.titleLarge,
-                            color = Color.White
-                        )
+                    // Botón guardar (solo visible cuando hay datos)
+                    AnimatedVisibility(
+                        visible = stepCount > 0 && !isRunning,
+                        enter = fadeIn() + expandHorizontally(),
+                        exit = fadeOut() + shrinkHorizontally()
+                    ) {
+                        Button(
+                            onClick = {
+                                val currentDay = SimpleDateFormat("EEE", Locale.getDefault())
+                                    .format(Date()).substring(0, 3)
+                                
+                                val activity = ActivityDay(
+                                    day = currentDay,
+                                    steps = stepCount,
+                                    distanceKm = distance.toFloat(),
+                                    activeTime = formatElapsedTime(elapsedTime)
+                                )
+                                
+                                viewModel.createActivity(activity)
+                                stepService?.resetTracking()
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(50.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color.White.copy(alpha = 0.2f),
+                                contentColor = Color.White
+                            ),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Save,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Guardar",
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                 }
                 
-                // Calcular distancia aproximada (promedio: 0.7m por paso = 0.0007 km)
-                val distanceKm = (stepCount * 0.0007f)
-                
-                Spacer(modifier = Modifier.height(8.dp))
-                
-                Button(
-                    onClick = {
-                        if (stepCount > 0) {
-                            val currentDay = SimpleDateFormat("EEE", Locale.getDefault())
-                                .format(Date()).substring(0, 3)
-                            
-                            val activity = ActivityDay(
-                                day = currentDay,
-                                steps = stepCount,
-                                distanceKm = distanceKm,
-                                activeTime = formatElapsedTime(elapsedTime)
-                            )
-                            
-                            viewModel.createActivity(activity)
-                            
-                            // Resetear contador después de guardar
-                            sensorManager.resetStepCount()
-                            startTime = null
-                            elapsedTime = 0L
-                            isListening.value = false
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = stepCount > 0 && !isListening.value,  // Solo habilitado cuando está pausado
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color.White,
-                        contentColor = PrimaryBlue
-                    )
+                // Botón reset (solo visible cuando hay datos y está pausado)
+                AnimatedVisibility(
+                    visible = (stepCount > 0 || elapsedTime > 0) && !isRunning,
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically()
                 ) {
-                    Icon(
-                        Icons.Default.Check,
-                        contentDescription = "Guardar",
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Guardar Actividad")
-                }
-                
-                if (stepCount > 0 || elapsedTime > 0) {
                     TextButton(
                         onClick = {
-                            // Solo reiniciar si está pausado
-                            if (!isListening.value) {
-                                sensorManager.resetStepCount()
-                                elapsedTime = 0L
-                                startTime = null
-                            }
+                            stepService?.resetTracking()
                         },
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = !isListening.value  // Solo habilitado cuando está pausado
+                        modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
-                            "Reiniciar contador",
-                            color = if (!isListening.value) 
-                                Color.White.copy(alpha = 0.8f) 
-                            else 
-                                Color.White.copy(alpha = 0.4f)
+                            text = "Reiniciar contador",
+                            color = Color.White.copy(alpha = 0.8f)
                         )
                     }
                 }
-            } else if (!isSensorAvailable) {
-                Text(
-                    "El sensor de pasos no está disponible en este dispositivo",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.8f)
-                )
             }
         }
+    }
+    
+    // Permission Dialog
+    if (showPermissionDialog) {
+        AlertDialog(
+            onDismissRequest = { showPermissionDialog = false },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.Security,
+                    contentDescription = null,
+                    tint = PrimaryBlue
+                )
+            },
+            title = {
+                Text("Permisos necesarios")
+            },
+            text = {
+                Text(
+                    "Para rastrear tu actividad en segundo plano, necesitamos los siguientes permisos:\n\n" +
+                    "• Reconocimiento de actividad (para contar pasos)\n" +
+                    "• Notificaciones (para mostrar progreso)\n" +
+                    "• Ubicación (opcional, para mejor precisión de distancia)"
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showPermissionDialog = false
+                        
+                        // Request permissions
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && !hasActivityPermission) {
+                            activityPermissionLauncher.launch(Manifest.permission.ACTIVITY_RECOGNITION)
+                        }
+                        
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasNotificationPermission) {
+                            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        }
+                    }
+                ) {
+                    Text("Conceder permisos")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPermissionDialog = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun StatItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    value: String,
+    label: String
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = Color.White.copy(alpha = 0.8f),
+            modifier = Modifier.size(20.dp)
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            color = Color.White
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = Color.White.copy(alpha = 0.7f)
+        )
     }
 }
 
@@ -326,12 +456,9 @@ fun formatElapsedTime(millis: Long): String {
     val minutes = (millis / (1000 * 60)) % 60
     val hours = (millis / (1000 * 60 * 60))
     
-    return if (hours > 0) {
-        "${hours}h ${minutes}m"
-    } else if (minutes > 0) {
-        "${minutes}m ${seconds}s"
-    } else {
-        "${seconds}s"
+    return when {
+        hours > 0 -> String.format("%dh %02dm", hours, minutes)
+        minutes > 0 -> String.format("%dm %02ds", minutes, seconds)
+        else -> String.format("%ds", seconds)
     }
 }
-
