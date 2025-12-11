@@ -115,7 +115,7 @@ fun ForgotPasswordScreen(nav: NavController) {
                     .align(Alignment.TopStart)
             ) {
                 Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    imageVector = Icons.Default.ArrowBack,
                     contentDescription = "Volver",
                     tint = Color.White
                 )

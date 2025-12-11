@@ -72,6 +72,7 @@ dependencies {
     
     // Animaciones
     implementation("androidx.compose.animation:animation:1.6.0")
+    implementation(libs.androidx.compose.animation.core.lint)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

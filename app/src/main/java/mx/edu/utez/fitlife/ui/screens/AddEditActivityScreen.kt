@@ -110,7 +110,7 @@ fun AddEditActivityScreen(
             ) {
                 IconButton(onClick = { navController.popBackStack() }) {
                     Icon(
-                        Icons.AutoMirrored.Filled.ArrowBack,
+                        Icons.Default.ArrowBack,
                         contentDescription = "Volver",
                         tint = Color.White
                     )

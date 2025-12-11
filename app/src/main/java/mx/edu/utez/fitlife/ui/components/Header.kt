@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -14,9 +15,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import mx.edu.utez.fitlife.ui.theme.*
+
 
 @Composable
 fun Header(
@@ -104,7 +107,7 @@ fun HeaderWithBack(
         ) {
             IconButton(onClick = onBackClick) {
                 Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    imageVector = Icons.Default.ArrowBack,
                     contentDescription = "Volver",
                     tint = Color.White
                 )
@@ -131,15 +134,6 @@ fun HeaderWithBack(
             
             // Spacer para balancear
             Spacer(modifier = Modifier.width(48.dp))
-        }
-    }
-}
-
-// Fix para Icons.AutoMirrored
-private object Icons {
-    object AutoMirrored {
-        object Filled {
-            val ArrowBack = androidx.compose.material.icons.Icons.AutoMirrored.Filled.ArrowBack
         }
     }
 }

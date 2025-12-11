@@ -29,6 +29,7 @@ import mx.edu.utez.fitlife.ui.theme.*
 import mx.edu.utez.fitlife.viewmodel.AuthViewModel
 import mx.edu.utez.fitlife.viewmodel.ActivityViewModel
 import androidx.activity.ComponentActivity
+import androidx.compose.material3.SegmentedButtonDefaults.Icon
 
 @Composable
 fun ProfileScreen(navController: NavController) {
@@ -436,9 +437,9 @@ private fun ProfileMenuItem(
                     color = TextSecondary
                 )
             }
-            
+
             Icon(
-                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                imageVector = Icons.Default.KeyboardArrowRight,
                 contentDescription = null,
                 tint = TextTertiary
             )
